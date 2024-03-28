@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yu-Gi-Quiz!</title>
+    <link rel="stylesheet" href="static/styles.css">
+    <style>
+        #main-content {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    
+    <header>
+        <p id="pseudo"></p>
+        <h1>Yu-Gi-Quiz!</h1>
+    </header>
+    
+    <div id="players-list">
+        <ul id="players">
+            <p>Joueurs:</p>
+        </ul>
+    </div>
+    <div id="response-list">
+        <ul id="responses"></ul>
+    </div>
+    <div class="container" id="main-content">
+        
+        <div id="timer" class="timer-container">
+            <div class="timer"></div>
+        </div>
+        <div id="card-container">
+            <div id ="card-rotator">
+                <img id="card" class="card mask-image zoom-effect" src="" alt="Card">
+                <div class="card__glare mask-image zoom-effect"></div>
+            </div>
+            
+        </div>
+        <input type="text" maxlength="75" id="user_answer" class="user-input" placeholder="Nom de la Carte">
+        <p id="image_name" class="response"></p>
+        <p id="response" class="response"></p>
+        <button id="button" class="button" style="display:none">Suivant</button>
+    </div>
+
+    <div id="loading-message">
+        Patientez, chargement en cours...
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.1.2/socket.io.js"></script>
+    <script>
+        var nextImage;
+        var is_moderator;
+        var pseudo;
+        var player_scores = {};
+        const socket = io();
+
+        function getCard(bool) {
+            fetch('/get_card')
+            .then(response => response.json())
+            .then(data => {
+                currentImage = data.image_name;
+                nextImage = data.next_image_name;
+                if (bool)
+                {
+                    document.getElementById('card').src = "static/Images/" + encodeURIComponent(currentImage);
+                    document.getElementById('image_name').textContent = currentImage.replace('.jpg', '');
+                }
+            });
+        }
+
+        function showAnswer() {
+            document.getElementById('responses').innerHTML = "";
+            document.getElementById('responses').style.display = "block";
+            const userAnswer = document.getElementById('user_answer').value;
+            const imageName = document.getElementById('card').src.split('/').pop();
+
+            const decodedImageName = decodeURIComponent(imageName);
+
+            fetch('/show_answer', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ answer: decodedImageName, user_answer: userAnswer }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('image_name').textContent = data.answer;
+                // A RETIRER DÉS QUE L'AFFICHAGE DE TOUTES LES RÉPONSES MARCHE
+                document.getElementById('response').textContent = "Votre réponse: " + data.user_answer;
+
+                document.getElementById('timer').style.display = "none";
+                document.getElementById('user_answer').style.display = "none";
+                document.getElementById('image_name').style.display = "block";
+                document.getElementById('response').style.display = "block";
+                if (pseudo.includes('♛')){document.getElementById('button').style.display = "block";}
+
+                document.getElementById('user_answer').value = "";
+
+                socket.emit('userAnswer', { pseudo: document.getElementById('responses').textContent, answer: data.user_answer });
+            });
+        }
+
+        function r_time() {
+            fetch('/r_time')
+            .then(response => response.json())
+            .then(data => {
+                return data.rtime;
+            })
+            .catch(error => console.error('Erreur lors de la récupération du temps restant :', error));
+        }
+
+        function next() {
+            document.getElementById('responses').innerHTML = "";
+            document.getElementById('responses').style.display = "none";
+            document.getElementById('image_name').style.display = "none";
+            document.getElementById('response').style.display = "none";
+            document.getElementById('card').src = "static/Images/" + encodeURIComponent(nextImage);
+
+            autoSubmit();
+            fetch('/suivant', {
+                method: 'POST'
+            })
+
+            document.getElementById('user_answer').focus();
+        }
+
+        function autoSubmit() {
+            if (pseudo.includes('♛')){document.getElementById('button').style.display = "none";}
+            document.getElementById('timer').style.display = "block";
+            document.getElementById('user_answer').style.display = "block";
+
+            document.getElementById('card').classList.add('zoomed');
+            document.querySelector('.card__glare').classList.add('zoomed');
+            document.getElementById('card').classList.add('mask-image');
+            document.querySelector('.card__glare').classList.add('mask-image');
+
+            var timeleft = 5;
+            var timer = setInterval(function(){
+                if(timeleft <= 1){
+                    clearInterval(timer);
+                    showAnswer();
+                    getCard(false);
+
+                    document.getElementById('card').classList.remove('zoomed');
+                    document.querySelector('.card__glare').classList.remove('zoomed');
+                    document.getElementById('card').classList.remove('mask-image');
+                    document.querySelector('.card__glare').classList.remove('mask-image');
+                }
+                timeleft -= 1;
+            }, 1000);
+        }
+
+        function autoSubmit2() {
+            document.getElementById('timer').style.display = "block";
+            document.getElementById('user_answer').style.display = "block";
+
+            document.getElementById('card').classList.add('zoomed');
+            document.querySelector('.card__glare').classList.add('zoomed');
+            document.getElementById('card').classList.add('mask-image');
+            document.querySelector('.card__glare').classList.add('mask-image');
+            showAnswer();
+
+            document.getElementById('card').classList.remove('zoomed');
+            document.querySelector('.card__glare').classList.remove('zoomed');
+            document.getElementById('card').classList.remove('mask-image');
+            document.querySelector('.card__glare').classList.remove('mask-image');
+        }
+
+        function increaseScore(playerId) {
+            socket.emit('updateScore', { playerId: playerId, operation: 'increase' });
+        }
+        
+        function decreaseScore(playerId) {
+            socket.emit('updateScore', { playerId: playerId, operation: 'decrease' });
+        }
+
+        document.getElementById('button').addEventListener('click', () => {
+            socket.emit('suivant');
+        });
+
+        const card = document.getElementById('card-rotator');
+        const cardContainer =document.getElementById('card-container');
+        const cardGlare = document.getElementById('card__glare');
+
+        cardContainer.addEventListener('mousemove', (e) =>{
+            const rect = cardContainer.getBoundingClientRect();
+            const rect2 = card.getBoundingClientRect();
+            const containerX = rect.left + rect.width / 2;
+            const containerY = rect.top + rect.height / 2;
+
+            const mouseX = e.clientX;
+            const mouseY = e.clientY;
+            const gmouseX = e.clientX-rect2.left;
+            const gmouseY = e.clientY-rect2.top;
+        
+            var hauteurFenetre = window.innerHeight;
+            const xAxis = (-(mouseX/hauteurFenetre - containerX/hauteurFenetre) / 5)*500;
+            const yAxis = ((mouseY/hauteurFenetre - containerY/hauteurFenetre) / 8)*500;
+            
+            document.documentElement.style.setProperty('--pointer-x', gmouseX + 'px');
+            document.documentElement.style.setProperty('--pointer-y', gmouseY + 'px');
+            card.style.transform = `rotateY(${xAxis}deg) rotateX(${yAxis}deg)`;
+        });
+
+        cardContainer.addEventListener('mouseenter',(e)=>{
+                card.style.transition="none";
+                document.documentElement.style.setProperty('--card-opacity', '1');
+
+        });
+        cardContainer.addEventListener('mouseleave',(e)=>{
+            card.style.transition="all 0.5s cubic-bezier(.53,-0.02,.65,2.06)";
+            card.style.transform='rotateY(0deg) rotateX(0deg)'
+            document.documentElement.style.setProperty('--card-opacity', '0');
+        });
+
+        socket.on('nouvelle_image', data => {
+            next();
+        });
+
+        socket.on('updateScores', data => {
+            player_scores = data.scores;
+            console.log(player_scores);
+            socket.emit('checkPlayers');
+        });
+
+        socket.on('updatePlayersList', data => {
+            const playersList = document.getElementById('players');
+            playersList.innerHTML = '';
+            const p = document.createElement('p');
+            p.textContent = "Joueurs:";
+            playersList.appendChild(p);
+            data.players.forEach(player => {
+                const li = document.createElement('li');
+                li.id = `player-${player}`; 
+                li.textContent = `${player} (${player_scores[player] || 0})`;
+                
+                if (pseudo.includes('♛'))
+                {
+                    const increaseButton = document.createElement('button');
+                    increaseButton.textContent = '+';
+                    increaseButton.className = 'increase-button';
+                    increaseButton.dataset.playerId = player;
+                    increaseButton.onclick = (event) => increaseScore(player);
+                    
+                    const decreaseButton = document.createElement('button');
+                    decreaseButton.textContent = '-';
+                    decreaseButton.className = 'decrease-button';
+                    decreaseButton.dataset.playerId = player;
+                    decreaseButton.onclick = () => decreaseScore(player);
+            
+                    li.appendChild(increaseButton);
+                    li.appendChild(decreaseButton);
+                }
+                
+                playersList.appendChild(li);
+            });
+        });
+
+        socket.on('showAnswer', data => {
+            const playerAnswer = document.createElement('li');
+            playerAnswer.textContent = data.answer;
+            document.getElementById('responses').appendChild(playerAnswer);
+            //Peut etre pas .appendChild ici mais plutot créer une nouvelle bulle de texte qui se place bien en face du pseudo correspondant
+        });
+
+        window.onload = function() {
+            var remainingTime=0
+            fetch('/check_session')
+            .then(response => response.json())
+            .then(data => {
+                pseudo = data.pseudo;
+                is_moderator = data.is_moderator;
+                if (pseudo) {
+                    document.getElementById('pseudo').textContent = pseudo;
+                    if (pseudo.includes('♛')){document.getElementById('button').style.display = "block";}
+                } else {
+                    console.log('Aucun pseudo trouvé dans la session');
+                }
+        
+                fetch('/r_time')
+                .then(response => response.json())
+                .then(data => {
+                    remainingTime = Math.round(data.rtime * 1000);
+        
+                    setTimeout(function() {
+                        document.getElementById('main-content').style.display = 'block';
+                        document.getElementById('loading-message').style.display = 'none';
+                    }, remainingTime-1);
+                })
+                .catch(error => console.error('Erreur lors de la récupération du temps restant:', error))
+                .finally(() => {
+                    socket.emit('checkScores');
+                    getCard(true);
+                    autoSubmit2();
+                });
+            })
+            .catch(error => console.error('Erreur lors de la récupération du pseudo:', error));
+        };
+    </script>
+</body>
+</html>

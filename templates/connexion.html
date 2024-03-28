@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yu-Gi-Quiz!</title>
+    <link rel="stylesheet" href="static/styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Yu-Gi-Quiz! - Connexion</h1>
+        <input type="text" maxlength="10" id="username-input" class="user-input" placeholder="Pseudo">
+        <button id="button" onclick="connexion()" class="button">Connexion</button>
+    </div>
+
+    <script>
+        function connexion() {
+            const pseudo = document.getElementById('username-input').value;
+            const formData = new FormData();
+            formData.append('pseudo', pseudo);
+
+            fetch('/connexion', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (response.ok) {
+                    window.location.href = '/';
+                } else {
+                    console.error('Erreur lors de la connexion');
+                }
+            })
+            .catch(error => console.error('Erreur lors de la requête :', error));
+        }
+    </script>
+</body>
+</html>
